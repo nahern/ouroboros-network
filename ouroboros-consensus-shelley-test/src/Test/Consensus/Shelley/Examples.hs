@@ -89,7 +89,6 @@ import qualified Shelley.Spec.Ledger.Keys as SL (asWitness, hashWithSerialiser,
                      signedKES)
 import qualified Shelley.Spec.Ledger.PParams as SL (emptyPParams,
                      emptyPParamsUpdate)
-import qualified Shelley.Spec.Ledger.Rewards as SL
 import qualified Shelley.Spec.Ledger.STS.Delegs as SL
                      (DelegsPredicateFailure (..))
 import qualified Shelley.Spec.Ledger.STS.Ledger as SL
@@ -606,12 +605,8 @@ exampleNewEpochState value = SL.NewEpochState {
           deltaT    = SL.DeltaCoin 10
         , deltaR    = SL.DeltaCoin (- 100)
         , rs        = Map.singleton
-                        (keyToCredential exampleStakeKey) $
-                        Set.singleton $ SL.Reward {
-                            SL.rewardType   = SL.MemberReward
-                          , SL.rewardPool   = (SL._poolId examplePoolParams)
-                          , SL.rewardAmount = SL.Coin 10
-                          }
+                        (keyToCredential exampleStakeKey)
+                        (SL.Coin 10)
         , deltaF    = SL.DeltaCoin (- 3)
         , nonMyopic = nonMyopic
         }
