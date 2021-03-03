@@ -51,7 +51,7 @@ import           Data.Set (Set)
 import           Data.Void (Void)
 import           Data.ByteString.Lazy (ByteString)
 import           Data.Kind (Type)
-import           System.Random (newStdGen)
+import           System.Random (newStdGen, split)
 
 import           Network.Mux ( MiniProtocolBundle (..)
                              , MiniProtocolInfo (..)
@@ -617,8 +617,12 @@ runDataDiffusion tracers
     localControlChannel <- Server.newControlChannel
     localServerStateVar <- Server.newObservableStateVarIO
 
-    -- RNG used for picking random peers from the ledger.
-    ledgerPeersRng <- newStdGen
+    -- RNG used for picking random peers from the ledger and for
+    -- demoting/promoting peers.
+    rng <- newStdGen
+    let (ledgerPeersRng, policyRng) = split rng
+    policyRngVar <- newTVarIO policyRng
+
     -- Request interface, supply the number of peers desired.
     ledgerPeersReq <- newEmptyTMVarIO :: IO (StrictTMVar IO NumberOfPeers)
     -- Response interface, returns a Set of peers. Nothing indicates that the
@@ -626,7 +630,11 @@ runDataDiffusion tracers
     -- the number of peers requested.
     ledgerPeersRsp <- newEmptyTMVarIO :: IO (StrictTMVar IO (Maybe (Set SockAddr, DiffTime)))
 
-    peerSelectionTargetsVar <- newTVarIO daPeerSelectionTargets
+    peerSelectionTargetsVar <- newTVarIO $ daPeerSelectionTargets {
+        -- Start with a smaller number of active peers, the churn governor will increase
+        -- it to the configured value after a delay.
+        targetNumberOfActivePeers = min 2 (targetNumberOfActivePeers daPeerSelectionTargets)
+      }
 
     let -- snocket for remote communication.
         snocket :: SocketSnocket
@@ -732,7 +740,7 @@ runDataDiffusion tracers
                   }
 
           Async.withAsync
-            (Governor.peerChurnGovernor peerSelectionTargetsVar)
+            (Governor.peerChurnGovernor daPeerSelectionTargets peerSelectionTargetsVar)
             $ \churnGovernorThread ->
               Async.withAsync
                 (runLedgerPeers
@@ -817,7 +825,7 @@ runDataDiffusion tracers
                                 dtTracePeerSelectionTracer
                                 dtDebugPeerSelectionInitiatorTracer
                                 peerSelectionActions
-                                Diffusion.Policies.simplePeerSelectionPolicy)
+                                (Diffusion.Policies.simplePeerSelectionPolicy policyRngVar))
                               $ \governorThread ->
 
                               -- wait for any thread to fail
@@ -900,7 +908,7 @@ runDataDiffusion tracers
                               dtTracePeerSelectionTracer
                               dtDebugPeerSelectionInitiatorResponderTracer
                               peerSelectionActions
-                              Diffusion.Policies.simplePeerSelectionPolicy)
+                              (Diffusion.Policies.simplePeerSelectionPolicy policyRngVar))
                             $ \governorThread -> do
                             let mkAddr :: AddrInfo -> (Socket.Family, SockAddr)
                                 mkAddr addr = ( Socket.addrFamily  addr

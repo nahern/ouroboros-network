@@ -38,6 +38,7 @@ import           Data.Semigroup (Min(..))
 import           Control.Applicative (Alternative((<|>)))
 import qualified Control.Concurrent.JobPool as JobPool
 import           Control.Concurrent.JobPool (JobPool)
+import           Control.Monad (forever)
 import           Control.Monad.Class.MonadAsync
 import           Control.Monad.Class.MonadThrow
 import           Control.Monad.Class.MonadSTM.Strict
@@ -563,18 +564,25 @@ $peer-churn-governor
 --
 peerChurnGovernor :: forall m.
                      ( MonadSTM m
-                     -- , MonadMonotonicTime m
+                     , MonadMonotonicTime m
                      , MonadDelay m
                      )
-                  => StrictTVar m PeerSelectionTargets
+                  => PeerSelectionTargets
+                  -> StrictTVar m PeerSelectionTargets
                   -> m Void
-peerChurnGovernor peerSelectionVar = do
-  base <- atomically $ readTVar peerSelectionVar
-  go base
-  where
-    go :: PeerSelectionTargets -> m Void
-    go base = do
-      threadDelay 600 -- XXX Should be around 1h
+peerChurnGovernor base peerSelectionVar = do
+  -- Wait a while so that not only the closest peers have had the time
+  -- to become warm.
+  startTs0 <- getMonotonicTime
+  threadDelay 3
+  atomically $ modifyTVar peerSelectionVar (\targets -> targets {
+      targetNumberOfActivePeers = targetNumberOfActivePeers base
+      })
+  endTs0 <- getMonotonicTime
+  threadDelay $ diffTime churnInterval $ Time $ diffTime endTs0 startTs0
+
+  forever $ do
+      startTs <- getMonotonicTime
 
       -- Purge the worst active peer(s).
       atomically $ modifyTVar peerSelectionVar (\targets -> targets {
@@ -610,9 +618,16 @@ peerChurnGovernor peerSelectionVar = do
         , targetNumberOfKnownPeers = targetNumberOfKnownPeers base
         , targetNumberOfEstablishedPeers = targetNumberOfEstablishedPeers base
         })
+      endTs <- getMonotonicTime
+      threadDelay $ diffTime churnInterval $ Time $ diffTime endTs startTs
 
-      go base
 
+  where
+    -- The time between running the churn governor.
+    churnInterval :: Time
+    churnInterval = Time 3600 -- 1h
+
+    -- Replace 20% or at least on peer every churnInterval.
     decrease :: Int -> Int
-    decrease v = v  - max 1 (v `div` 8)
+    decrease v = v  - max 1 (v `div` 5)
 
