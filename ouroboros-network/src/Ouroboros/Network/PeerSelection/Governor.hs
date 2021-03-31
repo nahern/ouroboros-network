@@ -36,6 +36,8 @@ module Ouroboros.Network.PeerSelection.Governor (
 
 import           Data.Void (Void)
 import           Data.Semigroup (Min(..))
+import           Data.List (sortOn)
+import qualified Data.Map.Strict as Map
 
 import           Control.Applicative (Alternative((<|>)))
 import qualified Control.Concurrent.JobPool as JobPool
@@ -57,8 +59,8 @@ import qualified Ouroboros.Network.PeerSelection.Governor.KnownPeers       as Kn
 import qualified Ouroboros.Network.PeerSelection.Governor.Monitor          as Monitor
 import qualified Ouroboros.Network.PeerSelection.Governor.RootPeers        as RootPeers
 import           Ouroboros.Network.PeerSelection.Governor.Types
+import           Ouroboros.Network.PeerSelection.PeerMetric
 import           Ouroboros.Network.BlockFetch (FetchMode (..))
-
 
 {- $overview
 
@@ -573,14 +575,17 @@ peerChurnGovernor :: forall m peeraddr.
                      ( MonadSTM m
                      , MonadMonotonicTime m
                      , MonadDelay m
+                     , Show peeraddr
+                     , Ord peeraddr
                      )
                   => Tracer m (TracePeerSelection peeraddr)
+                  -> PeerMetrics m peeraddr
                   -> StdGen
                   -> STM m FetchMode
                   -> PeerSelectionTargets
                   -> StrictTVar m PeerSelectionTargets
                   -> m Void
-peerChurnGovernor tracer inRng getFetchMode base peerSelectionVar = do
+peerChurnGovernor tracer metrics inRng getFetchMode base peerSelectionVar = do
   -- Wait a while so that not only the closest peers have had the time
   -- to become warm.
   startTs0 <- getMonotonicTime
@@ -619,6 +624,9 @@ peerChurnGovernor tracer inRng getFetchMode base peerSelectionVar = do
     go :: StdGen -> m Void
     go rng = do
       startTs <- getMonotonicTime
+
+      headerScores <- upstreamyness <$> (atomically $ getHeaderMetrics metrics)
+      traceWith tracer $ TraceXXX $ "Header: " ++ (show $ sortOn snd $ Map.toList headerScores)
 
       -- Purge the worst active peer(s).
       atomically decreaseActivePeers

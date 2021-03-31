@@ -512,6 +512,7 @@ data TracePeerSelection peeraddr =
      | TraceDemoteAsynchronous (Map peeraddr PeerStatus)
      | TraceGovernorWakeup
      | TraceChurnWait          DiffTime
+     | TraceXXX                String
   deriving Show
 
 data DebugPeerSelection peeraddr peerconn =
