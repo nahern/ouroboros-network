@@ -512,6 +512,7 @@ data TracePeerSelection peeraddr =
      | TraceDemoteAsynchronous (Map peeraddr PeerStatus)
      | TraceGovernorWakeup
      | TraceChurnWait          DiffTime
+     | TraceChurnMode          ChurnMode
      | TraceXXX                String
   deriving Show
 
@@ -520,3 +521,7 @@ data DebugPeerSelection peeraddr peerconn =
                           (Maybe DiffTime)
                           (PeerSelectionState peeraddr peerconn)
   deriving (Show, Functor)
+
+data ChurnMode = ChurnModeBulkSync
+               | ChurnModeNormal deriving Show
+
