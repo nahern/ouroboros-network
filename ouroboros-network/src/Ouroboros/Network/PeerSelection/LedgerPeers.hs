@@ -73,6 +73,8 @@ data TraceLedgerPeers =
       -- returned.
     | DisabledLedgerPeers
       -- ^ Trace for when getting peers from the ledger is disabled, that is DontUseLedger.
+    | TraceUseLedgerAfter !UseLedgerAfter
+      -- ^ Trace UseLedgerAfter value
     | WaitingOnRequest
     | RequestForPeers !NumberOfPeers
     | ReusingLedgerState !Int !DiffTime
@@ -92,6 +94,9 @@ instance Show TraceLedgerPeers where
     show (FetchingNewLedgerState cnt) =
         printf "Fetching new ledgerstate, %d registered pools"
             cnt
+    show (TraceUseLedgerAfter ula) =
+        printf "UseLedgerAfter state %s"
+            (show ula)
     show WaitingOnRequest = "WaitingOnRequest"
     show (RequestForPeers (NumberOfPeers cnt)) = printf "RequestForPeers %d" cnt
     show (ReusingLedgerState cnt age) =
@@ -194,6 +199,8 @@ runLedgerPeers inRng tracer useLedgerAfterVar LedgerPeersConsensusInterface{..} 
     go :: StdGen -> Time -> Map AccPoolStake (PoolStake, NonEmpty RelayAddress) -> m Void
     go rng oldTs peerMap = do
         useLedgerAfter <- atomically $ readTVar useLedgerAfterVar
+        traceWith tracer (TraceUseLedgerAfter useLedgerAfter)
+
         let peerListLifeTime = if Map.null peerMap && isLedgerPeersEnabled useLedgerAfter
                                   then 30
                                   else 1847 -- Close to but not exactly 30min.
