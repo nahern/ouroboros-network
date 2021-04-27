@@ -73,28 +73,38 @@ instance Show (SomeSecond BlockQuery blk) => Show (SomeSecond Query blk) where
     GetPartialLedgerConfig -> "GetPartialLedgerConfig"
 
 instance SerialiseNodeToClient blk (SomeSecond BlockQuery blk) => SerialiseNodeToClient blk (SomeSecond Query blk) where
-  encodeNodeToClient codecConfig blockVersion (SomeSecond (BlockQuery blockQuery))
-    = encodeNodeToClient
+  encodeNodeToClient codecConfig blockVersion (SomeSecond query) = case query of
+    BlockQuery blockQuery -> encodeNodeToClient
         @blk
-        @(SomeSecond BlockQuery blk)
+        @(SomeSecond Query blk)
         codecConfig
         blockVersion
-        (SomeSecond blockQuery)
-
-  decodeNodeToClient codecConfig blockVersion = do
-    SomeSecond blockQuery <- decodeNodeToClient
+        (SomeSecond (BlockQuery blockQuery))
+    GetPartialLedgerConfig -> encodeNodeToClient
         @blk
-        @(SomeSecond BlockQuery blk)
+        @(SomeSecond Query blk)
         codecConfig
         blockVersion
-    return (SomeSecond (BlockQuery blockQuery))
+        (SomeSecond GetPartialLedgerConfig)
 
-instance SerialiseResult blk (BlockQuery blk) => SerialiseResult blk (Query blk) where
-  encodeResult codecConfig blockVersion (BlockQuery blockQuery) result
-    = encodeResult codecConfig blockVersion blockQuery result
+  decodeNodeToClient codecConfig blockNodeToClientVersion = do
+    tag <- decodeTag
 
-  decodeResult codecConfig blockVersion (BlockQuery query)
-    = decodeResult codecConfig blockVersion query
+    case tag of
+      0 -> do
+        SomeSecond blockQuery <- decodeNodeToClient
+          @blk
+          @(SomeSecond BlockQuery blk)
+          codecConfig
+          blockNodeToClientVersion
+        return (SomeSecond (BlockQuery blockQuery))
+
+      1 -> return (SomeSecond GetPartialLedgerConfig)
+
+      n -> fail $ "Query blk: Unexpected tag " ++ show n ++ " but got "
+
+
+
 
 queryEncodeNodeToClient ::
     forall blk. (
@@ -103,7 +113,7 @@ queryEncodeNodeToClient ::
   => CodecConfig blk
   -> NodeToClientVersion
   -> BlockNodeToClientVersion blk
-  -> (SomeSecond Query blk)
+  -> SomeSecond Query blk
   -> Encoding
 queryEncodeNodeToClient codecConfig version blockVersion (SomeSecond query)
   | not (version >= NodeToClientV_9)

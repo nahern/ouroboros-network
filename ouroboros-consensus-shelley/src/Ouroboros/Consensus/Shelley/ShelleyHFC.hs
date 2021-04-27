@@ -45,7 +45,7 @@ import           Ouroboros.Consensus.HardFork.Combinator.State.Types
 import           Ouroboros.Consensus.HardFork.Combinator.Util.InPairs
                      (RequiringBoth (..), ignoringBoth)
 import           Ouroboros.Consensus.HardFork.History (Bound (boundSlot),
-                     toPureEpochInfo, dummyEpochInfo)
+                     dummyEpochInfo, toPureEpochInfo)
 import           Ouroboros.Consensus.HardFork.Simple
 import           Ouroboros.Consensus.Ledger.Abstract
 import           Ouroboros.Consensus.Node.NetworkProtocolVersion
