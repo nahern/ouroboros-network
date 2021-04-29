@@ -41,6 +41,8 @@ import qualified Data.Set as Set
 import           Data.Set (Set)
 import qualified Data.Map.Strict as Map
 import           Data.Map.Strict (Map)
+import           Data.IntMap.Strict (IntMap)
+import qualified Data.IntMap.Strict as IntMap
 import           Data.Void (Void)
 
 import           Control.Applicative ((<|>))
@@ -316,12 +318,33 @@ localRootPeersProvider tracer
       -- a placeholder list, in order for each monitored DomainAddress to
       -- be updated in the correct group.
       placeholder = map (\(t, _) -> (t, Map.empty)) domainsGroups
+      placeholder' :: [(Int, Map Socket.SockAddr PeerAdvertise)]
       placeholder' =
         foldr (\(group, addr, pa) ph
                 -> let (target, entry) = ph !! group
                    in updateList group (target, Map.insert addr pa entry) ph)
               placeholder
               ipsAddr
+
+      -- TODO: we should be able to use it instead of @placeholder'@
+      rootPeersGroups :: IntMap (Map Socket.SockAddr PeerAdvertise)
+      rootPeersGroups = IntMap.map f
+                     . IntMap.fromList
+                     $ domainsGroups
+         where
+           f :: Map RelayAddress PeerAdvertise -> Map Socket.SockAddr PeerAdvertise
+           f =   Map.mapKeys
+                   (\k -> case k of
+                     RelayAddress ip port ->
+                       IP.toSockAddr (ip, port)
+                     _ ->
+                       error "localRootPeersProvider: impossible happend"
+                   )
+               . Map.filterWithKey
+                   (\k _ -> case k of
+                     RelayAddress {} -> True
+                     RelayDomain {}  -> False
+                   )
 
   atomically $
     writeTVar rootPeersGroupsVar placeholder'
