@@ -61,7 +61,7 @@ belowTarget actions
   = Guarded Nothing $ do
       selectedForGossip <- pickPeers
                              policyPickKnownPeersForGossip
-                             availableForGossip
+                             (KnownPeers.embelishPeers availableForGossip knownPeers)
                              numGossipReqsPossible
       let numGossipReqs = Set.size selectedForGossip
       return $ \now -> Decision {
@@ -282,7 +282,7 @@ aboveTarget PeerSelectionPolicy {
       let numPeersToForget = numKnownPeers - targetNumberOfKnownPeers
       selectedToForget <- pickPeers
                             policyPickColdPeersToForget
-                            availableToForget
+                            (KnownPeers.embelishPeers availableToForget knownPeers)
                             numPeersToForget
       return $ \_now ->
         let knownPeers'      = KnownPeers.delete

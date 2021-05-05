@@ -22,7 +22,7 @@ import           Control.Exception (assert, SomeException)
 import qualified Ouroboros.Network.PeerSelection.EstablishedPeers as EstablishedPeers
 import           Ouroboros.Network.PeerSelection.EstablishedPeers (EstablishedPeers)
 import qualified Ouroboros.Network.PeerSelection.KnownPeers as KnownPeers
-import           Ouroboros.Network.PeerSelection.KnownPeers (KnownPeers)
+import           Ouroboros.Network.PeerSelection.KnownPeers (KnownPeers, KnownPeerInfo)
 import qualified Ouroboros.Network.PeerSelection.LocalRootPeers as LocalRootPeers
 import           Ouroboros.Network.PeerSelection.LocalRootPeers (LocalRootPeers)
 import           Ouroboros.Network.PeerSelection.Types
@@ -37,25 +37,25 @@ import           Ouroboros.Network.PeerSelection.Types
 -- The post-condition is that the picked set is non-empty but must not be
 -- bigger than the requested number.
 --
-type PickPolicy peeraddr m = Set peeraddr
+type PickPolicy peeraddr m = Map peeraddr KnownPeerInfo
                           -> Int
                           -> STM m (Set peeraddr)
 
 
 -- | Check pre-conditions and post-conditions on the pick policies
 pickPeers :: (Ord peeraddr, Functor m)
-          => (Set peeraddr -> Int -> m (Set peeraddr))
-          ->  Set peeraddr -> Int -> m (Set peeraddr)
+          => (Map peeraddr KnownPeerInfo -> Int -> m (Set peeraddr))
+          ->  Map peeraddr KnownPeerInfo -> Int -> m (Set peeraddr)
 pickPeers pick available num =
     assert precondition $
     fmap (\picked -> assert (postcondition picked) picked)
          (pick available numClamped)
   where
-    precondition         = not (Set.null available) && num > 0
+    precondition         = not (Map.null available) && num > 0
     postcondition picked = not (Set.null picked)
                         && Set.size picked <= numClamped
-                        && picked `Set.isSubsetOf` available
-    numClamped           = min num (Set.size available)
+                        && picked `Set.isSubsetOf` (Map.keysSet available)
+    numClamped           = min num (Map.size available)
 
 
 data PeerSelectionPolicy peeraddr m = PeerSelectionPolicy {

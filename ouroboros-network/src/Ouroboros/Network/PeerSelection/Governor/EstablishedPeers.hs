@@ -73,7 +73,7 @@ belowTarget actions
                              - numConnectInProgress
       selectedToPromote <- pickPeers
                              policyPickColdPeersToPromote
-                             availableToPromote
+                             (KnownPeers.embelishPeers availableToPromote knownPeers)
                              numPeersToPromote
       return $ \_now -> Decision {
         decisionTrace = TracePromoteColdPeers
@@ -161,6 +161,7 @@ jobPromoteColdPeer PeerSelectionActions {
       peerconn <- establishPeerConnection peeraddr
       return $ Completion $ \st@PeerSelectionState {
                                establishedPeers,
+                               knownPeers,
                                targets = PeerSelectionTargets {
                                            targetNumberOfEstablishedPeers
                                          }
@@ -168,6 +169,7 @@ jobPromoteColdPeer PeerSelectionActions {
                              _now ->
         let establishedPeers' = EstablishedPeers.insert peeraddr peerconn
                                                         establishedPeers
+            knownPeers' = KnownPeers.clearTepid peeraddr knownPeers
         in Decision {
              decisionTrace = TracePromoteColdDone targetNumberOfEstablishedPeers
                                                   (EstablishedPeers.size establishedPeers')
@@ -178,7 +180,7 @@ jobPromoteColdPeer PeerSelectionActions {
                                                          (inProgressPromoteCold st),
                                knownPeers            = KnownPeers.resetFailCount
                                                          peeraddr
-                                                         (knownPeers st)
+                                                         knownPeers'
                              },
              decisionJobs  = []
            }
@@ -204,6 +206,7 @@ aboveTarget actions
             st@PeerSelectionState {
               establishedPeers,
               activePeers,
+              knownPeers,
               inProgressDemoteWarm,
               inProgressPromoteWarm,
               targets = PeerSelectionTargets {
@@ -239,7 +242,7 @@ aboveTarget actions
                                 Set.\\ inProgressPromoteWarm
       selectedToDemote <- pickPeers
                             policyPickWarmPeersToDemote
-                            availableToDemote
+                            (KnownPeers.embelishPeers availableToDemote knownPeers)
                             numPeersToDemote
       let selectedToDemote' :: Map peeraddr peerconn
           selectedToDemote' = EstablishedPeers.toMap establishedPeers

@@ -9,6 +9,7 @@ import           Control.Monad.Class.MonadSTM.Strict
 import           Control.Monad.Class.MonadTime
 
 import           Data.List (sortOn, unfoldr)
+import           Data.Map.Strict (Map)
 import qualified Data.Map.Strict as Map
 import qualified Data.Set as Set
 import           Data.Word (Word32)
@@ -17,6 +18,7 @@ import           System.Random
 import           Network.Socket (SockAddr)
 
 import           Ouroboros.Network.PeerSelection.Governor.Types
+import           Ouroboros.Network.PeerSelection.KnownPeers (KnownPeerInfo (..))
 import           Ouroboros.Network.PeerSelection.PeerMetric
 
 
@@ -49,8 +51,8 @@ simplePeerSelectionPolicy rngVar getChurnMode metrics = PeerSelectionPolicy {
       policyPickWarmPeersToPromote  = simplePromotionPolicy,
 
       policyPickHotPeersToDemote    = hotDemotionPolicy,
-      policyPickWarmPeersToDemote   = simpleDemotionPolicy,
-      policyPickColdPeersToForget   = simpleDemotionPolicy,
+      policyPickWarmPeersToDemote   = warmDemotionPolicy,
+      policyPickColdPeersToForget   = coldForgetPolicy,
 
       policyFindPublicRootTimeout   = 5,    -- seconds
       policyMaxInProgressGossipReqs = 2,
@@ -60,14 +62,17 @@ simplePeerSelectionPolicy rngVar getChurnMode metrics = PeerSelectionPolicy {
     }
   where
 
-     -- Add metrics and a random number in order to prevent ordering based on SockAddr
-    addRand :: Set.Set SockAddr -> STM m (Map.Map SockAddr Word32)
-    addRand available = do
+     -- Add a random number in order to prevent ordering based on SockAddr.
+     -- The random number is influenced by `kpiFn`.
+    addRand :: Map SockAddr KnownPeerInfo
+            -> (((SockAddr, KnownPeerInfo), Word32) -> (SockAddr, Word32))
+            -> STM m (Map SockAddr Word32)
+    addRand available kpiFn = do
       inRng <- readTVar rngVar
 
       let (rng, rng') = split inRng
-          rns = take (Set.size available) $ unfoldr (Just . random)  rng :: [Word32]
-          available' = Map.fromList $ zip (Set.toList available) rns
+          rns = take (Map.size available) $ unfoldr (Just . random)  rng :: [Word32]
+          available' = Map.fromList $ zipWith (curry kpiFn) (Map.toList available) rns
       writeTVar rngVar rng'
       return available'
 
@@ -76,10 +81,10 @@ simplePeerSelectionPolicy rngVar getChurnMode metrics = PeerSelectionPolicy {
         mode <- getChurnMode
         scores <- case mode of
                        ChurnModeNormal ->
-                           upstreamyness <$> (getHeaderMetrics metrics)
+                           upstreamyness <$> getHeaderMetrics metrics
                        ChurnModeBulkSync ->
-                           fetchyness <$> (getFetchedMetrics metrics)
-        available' <- addRand available
+                           fetchyness <$> getFetchedMetrics metrics
+        available' <- addRand available nullWeight
         return $ Set.fromList
              . map fst
              . take pickNum
@@ -90,20 +95,63 @@ simplePeerSelectionPolicy rngVar getChurnMode metrics = PeerSelectionPolicy {
 
     simplePromotionPolicy :: PickPolicy SockAddr m
     simplePromotionPolicy available pickNum = do
-      available' <- addRand available
+      available' <- addRand available  nullWeight
       return $ Set.fromList
              . map fst
              . take pickNum
-             . sortOn (\(_, rn) -> rn)
+             . sortOn snd
              . Map.assocs
              $ available'
 
-    simpleDemotionPolicy :: PickPolicy SockAddr m
-    simpleDemotionPolicy available pickNum = do
-      available' <- addRand available
+    _simpleDemotionPolicy :: PickPolicy SockAddr m
+    _simpleDemotionPolicy available pickNum = do
+      available' <- addRand available nullWeight
       return $ Set.fromList
              . map fst
              . take pickNum
-             . sortOn (\(_, rn) -> rn)
+             . sortOn snd
              . Map.assocs
              $ available'
+
+    -- Randomly pick peers to demote, peeers with knownPeerTepid set are twice
+    -- as likely to be demoted.
+    warmDemotionPolicy :: PickPolicy SockAddr m
+    warmDemotionPolicy available pickNum = do
+      available' <- addRand available tepidWeight
+      return $ Set.fromList
+             . map fst
+             . take pickNum
+             . sortOn snd
+             . Map.assocs
+             $ available'
+
+    -- Randomly pick peers to forget, peers with failures are more likely to
+    -- be forgotten.
+    coldForgetPolicy :: PickPolicy SockAddr m
+    coldForgetPolicy available pickNum = do
+      available' <- addRand available failWeight
+      return $ Set.fromList
+             . map fst
+             . take pickNum
+             . sortOn snd
+             . Map.assocs
+             $ available'
+
+    -- KnownPeerInfo does not influence 'r'.
+    nullWeight :: ((SockAddr, KnownPeerInfo), Word32)
+               -> (SockAddr, Word32)
+    nullWeight ((p, _), r) = (p, r)
+
+
+    -- knownPeerTepid cuts r in half.
+    tepidWeight :: ((SockAddr, KnownPeerInfo), Word32)
+                -> (SockAddr, Word32)
+    tepidWeight ((peer, KnownPeerInfo{knownPeerTepid}), r) =
+          if knownPeerTepid then (peer, r `div` 2)
+                            else (peer, r)
+
+    -- knownPeerFailCount lowers r.
+    failWeight :: ((SockAddr, KnownPeerInfo), Word32)
+               -> (SockAddr, Word32)
+    failWeight ((peer, KnownPeerInfo{knownPeerFailCount}), r) =
+          (peer, r `div` (1 + fromIntegral knownPeerFailCount))

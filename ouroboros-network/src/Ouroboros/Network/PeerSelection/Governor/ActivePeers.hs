@@ -19,6 +19,7 @@ import           Control.Concurrent.JobPool (Job(..))
 import           Control.Exception (SomeException, assert)
 
 import qualified Ouroboros.Network.PeerSelection.EstablishedPeers as EstablishedPeers
+import           Ouroboros.Network.PeerSelection.KnownPeers (embelishPeers, foundToBeTepid)
 import           Ouroboros.Network.PeerSelection.Governor.Types
 
 
@@ -41,6 +42,7 @@ belowTarget actions
             st@PeerSelectionState {
               establishedPeers,
               activePeers,
+              knownPeers,
               inProgressPromoteWarm,
               inProgressDemoteWarm,
               targets = PeerSelectionTargets {
@@ -66,7 +68,7 @@ belowTarget actions
                              - numPromoteInProgress
       selectedToPromote <- pickPeers
                              policyPickWarmPeersToPromote
-                             availableToPromote
+                             (embelishPeers availableToPromote knownPeers)
                              numPeersToPromote
       let selectedToPromote' :: Map peeraddr peerconn
           selectedToPromote' = EstablishedPeers.toMap establishedPeers
@@ -175,6 +177,7 @@ aboveTarget actions
             st@PeerSelectionState {
               establishedPeers,
               activePeers,
+              knownPeers,
               inProgressDemoteHot,
               targets = PeerSelectionTargets {
                           targetNumberOfActivePeers
@@ -198,7 +201,7 @@ aboveTarget actions
                                 Set.\\ inProgressDemoteHot
       selectedToDemote <- pickPeers
                             policyPickHotPeersToDemote
-                            availableToDemote
+                            (embelishPeers availableToDemote knownPeers)
                             numPeersToDemote
       let selectedToDemote' :: Map peeraddr peerconn
           selectedToDemote' = EstablishedPeers.toMap establishedPeers
@@ -258,19 +261,22 @@ jobDemoteActivePeer PeerSelectionActions{peerStateActions = PeerStateActions {de
       deactivatePeerConnection peerconn
       return $ Completion $ \st@PeerSelectionState {
                                 activePeers,
+                                knownPeers,
                                 targets = PeerSelectionTargets {
                                             targetNumberOfActivePeers
                                           }
                              }
                              _now ->
         assert (peeraddr `EstablishedPeers.member` establishedPeers st) $
-        let activePeers' = Set.delete peeraddr activePeers in
+        let activePeers' = Set.delete peeraddr activePeers
+            knownPeers' = foundToBeTepid peeraddr knownPeers in
         Decision {
           decisionTrace = TraceDemoteHotDone targetNumberOfActivePeers
                                              (Set.size activePeers')
                                              peeraddr,
           decisionState = st {
                             activePeers         = activePeers',
+                            knownPeers          = knownPeers',
                             inProgressDemoteHot = Set.delete peeraddr
                                                     (inProgressDemoteHot st)
                           },

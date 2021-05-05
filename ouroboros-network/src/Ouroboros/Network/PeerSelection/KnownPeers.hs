@@ -6,6 +6,7 @@
 module Ouroboros.Network.PeerSelection.KnownPeers (
     -- * Types
     KnownPeers,
+    KnownPeerInfo (..),
     invariant,
 
     -- * Basic container operations
@@ -19,6 +20,9 @@ module Ouroboros.Network.PeerSelection.KnownPeers (
     setCurrentTime,
     incrementFailCount,
     resetFailCount,
+    foundToBeTepid,
+    clearTepid,
+    embelishPeers,
 
     -- ** Tracking when we can gossip
     minGossipTime,
@@ -98,6 +102,7 @@ data KnownPeerInfo = KnownPeerInfo {
        -- be used by policies to select peers to forget.
        --
        knownPeerFailCount :: !Int
+     , knownPeerTepid     :: !Bool
      }
   deriving (Eq, Show)
 
@@ -181,10 +186,12 @@ insert peeraddrs
     newPeerInfo _peeraddr =
       KnownPeerInfo {
         knownPeerFailCount = 0
+      , knownPeerTepid = False
       }
     mergePeerInfo old _new =
       KnownPeerInfo {
         knownPeerFailCount = knownPeerFailCount old
+      , knownPeerTepid = knownPeerTepid old
       }
 
 delete :: Ord peeraddr
@@ -290,6 +297,43 @@ resetFailCount peeraddr knownPeers@KnownPeers{allPeers} =
                               peeraddr allPeers
                }
 
+foundToBeTepid :: Ord peeraddr
+               => peeraddr
+               -> KnownPeers peeraddr
+               -> KnownPeers peeraddr
+foundToBeTepid = updateKnowPeerTepid True
+
+clearTepid :: Ord peeraddr
+           => peeraddr
+           -> KnownPeers peeraddr
+           -> KnownPeers peeraddr
+clearTepid = updateKnowPeerTepid False
+
+updateKnowPeerTepid :: Ord peeraddr
+                    => Bool
+                    -> peeraddr
+                    -> KnownPeers peeraddr
+                    -> KnownPeers peeraddr
+updateKnowPeerTepid tepid peeraddr knownPeers@KnownPeers{allPeers} =
+    assert (peeraddr `Map.member` allPeers) $
+    knownPeers { allPeers = Map.update (\kpi  -> Just kpi { knownPeerTepid = tepid })
+                              peeraddr allPeers
+               }
+
+embelishPeers :: forall peeraddr. Ord peeraddr
+              => Set peeraddr
+              -> KnownPeers peeraddr
+              -> Map peeraddr KnownPeerInfo
+embelishPeers ps KnownPeers{allPeers} =
+    List.foldl' fn Map.empty ps
+  where
+    fn :: Map peeraddr KnownPeerInfo
+       -> peeraddr
+       -> Map peeraddr KnownPeerInfo
+    fn m peer =
+        case Map.lookup peer allPeers of
+             Nothing  -> assert False $ m
+             Just kpi -> Map.insert peer kpi m
 
 -------------------------------
 -- Tracking when we can gossip

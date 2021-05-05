@@ -23,6 +23,8 @@ module Test.Ouroboros.Network.PeerSelection.Script (
 
   ) where
 
+import           Data.Map.Strict (Map)
+import qualified Data.Map.Strict as Map
 import           Data.Set (Set)
 import qualified Data.Set as Set
 import           Data.List.NonEmpty (NonEmpty (..))
@@ -134,31 +136,32 @@ instance Arbitrary PickMembers where
 
 interpretPickScript :: (MonadSTMTx stm tvar tmvar tqueue tbqueue, Ord peeraddr)
                     => tvar PickScript
-                    -> Set peeraddr
+                    -> Map peeraddr k
                     -> Int
                     -> stm (Set peeraddr)
 interpretPickScript scriptVar available pickNum
-  | Set.null available
+  | Map.null available
   = error "interpretPickScript: given empty map to pick from"
   | pickNum <= 0
   = error "interpretPickScript: given invalid pickNum"
 
-  | Set.size available <= pickNum
-  = return available
+  | Map.size available <= pickNum
+  = return $ Set.fromList $ Map.keys available
 
   | otherwise
   = do pickmembers <- stepScriptSTM scriptVar
        return (interpretPickMembers pickmembers available pickNum)
 
 interpretPickMembers :: Ord peeraddr
-                     => PickMembers -> Set peeraddr -> Int -> Set peeraddr
-interpretPickMembers PickFirst      ps _ = Set.singleton (Set.elemAt 0 ps)
-interpretPickMembers PickAll        ps n = Set.take n ps
+                     => PickMembers -> Map peeraddr k -> Int -> Set peeraddr
+interpretPickMembers PickFirst      ps _ = Set.singleton $ fst (Map.elemAt 0 ps)
+interpretPickMembers PickAll        ps n = Set.fromList $ take n  $ Map.keys ps
 interpretPickMembers (PickSome ixs) ps n = pickMapKeys ps (take n ixs)
 
-pickMapKeys :: Ord a => Set a -> [Int] -> Set a
+pickMapKeys :: Ord a => Map a b -> [Int] -> Set a
 pickMapKeys m ns =
-    Set.fromList (map pick ns)
+    let s = Set.fromList $ Map.keys m in
+    Set.fromList (map (pick s) ns)
   where
-    pick n = Set.elemAt i m where i = n `mod` Set.size m
+    pick s n = Set.elemAt i s where i = n `mod` Set.size s
 
