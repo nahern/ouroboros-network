@@ -14,10 +14,10 @@ module Ouroboros.Consensus.Ledger.Query (
   , QueryLedger (..)
   , ShowQuery (..)
   , answerQuery
-  , queryEncodeNodeToClient
   , queryDecodeNodeToClient
-  , queryEncodeResult
   , queryDecodeResult
+  , queryEncodeNodeToClient
+  , queryEncodeResult
   ) where
 
 import           Data.Kind (Type)
@@ -27,14 +27,14 @@ import           Ouroboros.Network.Protocol.LocalStateQuery.Type
                      (ShowQuery (..))
 
 import           Cardano.Binary
+import           Ouroboros.Consensus.Block.Abstract (CodecConfig)
 import           Ouroboros.Consensus.Ledger.Extended
 import           Ouroboros.Consensus.Node.NetworkProtocolVersion
-                     (NodeToClientVersion(..), HasNetworkProtocolVersion (..))
+                     (HasNetworkProtocolVersion (..), NodeToClientVersion (..))
 import           Ouroboros.Consensus.Node.Serialisation
                      (SerialiseNodeToClient (..), SerialiseResult (..))
 import           Ouroboros.Consensus.Util (ShowProxy (..), SomeSecond (..))
 import           Ouroboros.Consensus.Util.DepPair
-import Ouroboros.Consensus.Block.Abstract (CodecConfig)
 
 {-------------------------------------------------------------------------------
   Queries
