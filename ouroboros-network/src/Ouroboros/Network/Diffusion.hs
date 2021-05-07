@@ -95,6 +95,13 @@ import           Ouroboros.Network.PeerSelection.RootPeersDNS ( resolveDomainAdd
                                                               , RelayAddress(..)
                                                               , TraceLocalRootPeers(..)
                                                               , TracePublicRootPeers(..)
+                                                              , DNSActions (..)
+                                                              , resolverResource
+                                                              , asyncResolverResource
+#if defined(mingw32_HOST_OS)
+                                                              , newResolverResource
+#endif
+                                                              , lookupAWithTTL
                                                               )
 import qualified Ouroboros.Network.PeerSelection.Governor as Governor
 import           Ouroboros.Network.PeerSelection.Governor.Types ( TracePeerSelection (..)
@@ -171,7 +178,7 @@ data DiffusionTracers = DiffusionTracers {
         :: Tracer IO NodeToNode.HandshakeTr
 
     , dtTraceLocalRootPeersTracer
-        :: Tracer IO TraceLocalRootPeers
+        :: Tracer IO (TraceLocalRootPeers IOException)
 
     , dtTracePublicRootPeersTracer
         :: Tracer IO TracePublicRootPeers
@@ -762,6 +769,14 @@ runDataDiffusion tracers
                 dtTracePublicRootPeersTracer
                 timeout
                 DNS.defaultResolvConf
+                DNSActions {
+                  dnsResolverResource = resolverResource,
+                  dnsAsyncResolverResource = asyncResolverResource,
+#if defined(mingw32_HOST_OS)
+                  dnsNewResolverResource = newResolverResource,
+#endif
+                  dnsLookupAWithTTL = lookupAWithTTL
+                }
                 )
               (takeTMVar ledgerPeersReq)
               (putTMVar ledgerPeersRsp)
