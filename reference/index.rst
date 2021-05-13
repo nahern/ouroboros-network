@@ -15,9 +15,6 @@ documents in various stages:
 -  `Ouroboros-Network Component Overview`_ - an overview of all the
    components maintained by the networking team.
 
--  `Network Implementation Overview`_ This is a short document which
-   just give an overview of the network stack.
-
 -  `Data diffusion and peer discovery`_ a mind map of notions which was
    compiled to initially organise our knowledge (requires `xmind`_).
 
