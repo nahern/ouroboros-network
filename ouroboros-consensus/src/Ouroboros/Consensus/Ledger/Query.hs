@@ -24,9 +24,6 @@ module Ouroboros.Consensus.Ledger.Query (
 import           Data.Kind (Type)
 import           Data.Maybe (isJust)
 
-import           Ouroboros.Network.Protocol.LocalStateQuery.Type
-                     (ShowQuery (..))
-
 import           Cardano.Binary
 import           Ouroboros.Consensus.Block.Abstract (CodecConfig)
 import           Ouroboros.Consensus.Config (topLevelConfigLedger)
@@ -38,6 +35,9 @@ import           Ouroboros.Consensus.Node.Serialisation
                      (SerialiseNodeToClient (..), SerialiseResult (..))
 import           Ouroboros.Consensus.Util (ShowProxy (..), SomeSecond (..))
 import           Ouroboros.Consensus.Util.DepPair
+
+import           Ouroboros.Network.Protocol.LocalStateQuery.Type
+                     (ShowQuery (..))
 
 {-------------------------------------------------------------------------------
   Queries
@@ -152,6 +152,7 @@ queryDecodeNodeToClient codecConfig version blockVersion
             codecConfig
             blockVersion
         return (SomeSecond (BlockQuery x))
+      1 -> return (SomeSecond GetPartialLedgerConfig)
       _ -> fail $ "SomeSecond Query blk: unknown tag " ++ show tag
 
 queryEncodeResult ::

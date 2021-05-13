@@ -25,10 +25,13 @@ module Ouroboros.Consensus.BlockchainTime.WallClock.Types (
   , SlotLength
   ) where
 
-import           Data.Time.Clock (NominalDiffTime)
+import           Cardano.Slotting.Time
+import           Data.Time (NominalDiffTime)
 import           NoThunks.Class (NoThunks, OnlyCheckWhnfNamed (..))
 
-import           Cardano.Slotting.Time
+{-------------------------------------------------------------------------------
+  Relative time
+-------------------------------------------------------------------------------}
 
 addRelTime :: NominalDiffTime -> RelativeTime -> RelativeTime
 addRelTime = addRelativeTime
